@@ -9,179 +9,153 @@ import { cn } from '@/lib/utils';
 const services = [
   {
     title: 'Gaming & Interactive',
-    subtitle: 'Build Worlds',
-    description: 'Immersive 3D worlds, Unity engines, WebGL experiences, and hyper-realistic environments that redefine digital interaction.',
+    sub: 'Build Worlds',
+    desc: 'Immersive 3D environments, physics engines, and real-time WebGL experiences that blur the line between digital and real.',
     href: '/gaming',
     icon: Gamepad2,
-    accent: '#00ff9d',
-    accentRGB: '0, 255, 157',
-    tags: ['Unity', 'WebGL', 'VR/AR', 'Unreal'],
-    stat: '60fps',
-    statLabel: 'Guaranteed',
+    color: '#00ffa3', rgb: '0,255,163',
+    tag: '// game.engine',
+    stat: '60fps', statLabel: 'guaranteed',
+    tags: ['Unity', 'Unreal', 'WebGL', 'VR/AR'],
+    gradient: 'from-[#00ffa3]/10 via-transparent to-[#00e5ff]/5',
     delay: 0,
   },
   {
     title: 'AI & Automation',
-    subtitle: 'Think Smarter',
-    description: 'Custom agents, LLM integration, and intelligent workflows that automate the complex and amplify human potential.',
+    sub: 'Think Smarter',
+    desc: 'Autonomous agents, LLM integrations, and intelligent pipelines that transform how your business operates.',
     href: '/ai',
     icon: Bot,
-    accent: '#a855f7',
-    accentRGB: '168, 85, 247',
-    tags: ['LLMs', 'Agents', 'Pipelines', 'RAG'],
-    stat: '10x',
-    statLabel: 'Efficiency',
-    delay: 0.15,
+    color: '#b44dff', rgb: '180,77,255',
+    tag: '// neural.network',
+    stat: '10×', statLabel: 'efficiency',
+    tags: ['GPT-4', 'Agents', 'RAG', 'Pipelines'],
+    gradient: 'from-[#b44dff]/10 via-transparent to-[#ff2d78]/5',
+    delay: 0.14,
   },
   {
     title: 'Fullstack Systems',
-    subtitle: 'Scale Fast',
-    description: 'Enterprise-grade React dashboards, scalable backends, and cloud infrastructure built to handle millions of users.',
+    sub: 'Scale Fast',
+    desc: 'Enterprise React dashboards, Golang backends, and cloud infrastructure engineered for millions of users.',
     href: '/fullstack',
     icon: Code2,
-    accent: '#3b82f6',
-    accentRGB: '59, 130, 246',
+    color: '#00e5ff', rgb: '0,229,255',
+    tag: '// sys.architecture',
+    stat: '99.9%', statLabel: 'uptime SLA',
     tags: ['Next.js', 'Postgres', 'AWS', 'Docker'],
-    stat: '99.9%',
-    statLabel: 'Uptime',
-    delay: 0.3,
+    gradient: 'from-[#00e5ff]/10 via-transparent to-[#3b82f6]/5',
+    delay: 0.28,
   },
 ];
 
-// 3D Tilt Card
-function TiltCard({ service, index }: { service: typeof services[0]; index: number }) {
+function HoloCard({ svc, i }: { svc: typeof services[0]; i: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [8, -8]), { stiffness: 200, damping: 30 });
-  const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-8, 8]), { stiffness: 200, damping: 30 });
-  const [isHovered, setIsHovered] = useState(false);
+  const x = useMotionValue(0), y = useMotionValue(0);
+  const rx = useSpring(useTransform(y, [-0.5,0.5], [10,-10]), { stiffness:180, damping:25 });
+  const ry = useSpring(useTransform(x, [-0.5,0.5], [-10,10]), { stiffness:180, damping:25 });
+  const [hov, setHov] = useState(false);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = ref.current!.getBoundingClientRect();
-    x.set((e.clientX - rect.left) / rect.width - 0.5);
-    y.set((e.clientY - rect.top) / rect.height - 0.5);
+  const move = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = ref.current!.getBoundingClientRect();
+    x.set((e.clientX - r.left) / r.width  - 0.5);
+    y.set((e.clientY - r.top)  / r.height - 0.5);
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 60 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-50px' }}
-      transition={{ delay: service.delay, duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
-      style={{ perspective: 1000 }}
+      initial={{ opacity:0, y:70, rotateX: 15 }}
+      whileInView={{ opacity:1, y:0, rotateX:0 }}
+      viewport={{ once:true, margin:'-40px' }}
+      transition={{ delay: svc.delay, duration:0.9, ease:[0.23,1,0.32,1] }}
+      style={{ perspective: 900 }}
     >
-      <motion.div
-        ref={ref}
-        style={{ rotateX, rotateY, transformStyle: 'preserve-3d' }}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => { x.set(0); y.set(0); setIsHovered(false); }}
+      <motion.div ref={ref} style={{ rotateX: rx, rotateY: ry, transformStyle:'preserve-3d' }}
+        onMouseMove={move}
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => { x.set(0); y.set(0); setHov(false); }}
       >
-        <Link href={service.href} className="block h-full">
-          <div
-            className="relative h-full rounded-2xl border overflow-hidden transition-all duration-500"
+        <Link href={svc.href} className="block h-full" data-cur={svc.color}>
+          <div className="relative h-full rounded-2xl overflow-hidden border transition-all duration-500"
             style={{
-              borderColor: isHovered ? `${service.accent}40` : 'rgba(255,255,255,0.06)',
-              background: isHovered
-                ? `radial-gradient(ellipse at 50% 0%, rgba(${service.accentRGB}, 0.08) 0%, #080808 70%)`
-                : '#080808',
-              boxShadow: isHovered ? `0 0 60px rgba(${service.accentRGB}, 0.15), 0 30px 60px rgba(0,0,0,0.5)` : 'none',
+              borderColor: hov ? `rgba(${svc.rgb},.35)` : 'rgba(255,255,255,.05)',
+              background: hov
+                ? `radial-gradient(ellipse 100% 80% at 50% -10%, rgba(${svc.rgb},.10) 0%, transparent 70%), #090618`
+                : '#090618',
+              boxShadow: hov ? `0 30px 80px rgba(${svc.rgb},.18), 0 0 0 1px rgba(${svc.rgb},.1)` : 'none',
             }}
           >
-            {/* Top accent line */}
-            <div
-              className="absolute top-0 left-0 right-0 h-px transition-opacity duration-500"
+            {/* Holographic shimmer layer */}
+            <div className="absolute inset-0 pointer-events-none transition-opacity duration-500"
               style={{
-                background: `linear-gradient(90deg, transparent, ${service.accent}, transparent)`,
-                opacity: isHovered ? 0.6 : 0,
+                background: `linear-gradient(135deg, rgba(${svc.rgb},.04) 0%, transparent 50%, rgba(${svc.rgb},.03) 100%)`,
+                opacity: hov ? 1 : 0,
               }}
             />
 
-            {/* Corner number */}
-            <div
-              className="absolute top-6 right-6 font-mono-custom text-5xl font-bold leading-none transition-opacity duration-500"
-              style={{ color: `rgba(${service.accentRGB}, ${isHovered ? 0.08 : 0.03})` }}
+            {/* Top accent line */}
+            <div className="absolute top-0 inset-x-0 h-px transition-all duration-500"
+              style={{ background: `linear-gradient(90deg,transparent,rgba(${svc.rgb},.7),transparent)`, opacity: hov ? 1 : 0 }}
+            />
+
+            {/* Corner index */}
+            <div className="absolute top-6 right-6 font-display text-6xl font-black leading-none transition-all duration-500"
+              style={{ color: `rgba(${svc.rgb},${hov ? .06 : .025})` }}
             >
-              0{index + 1}
+              0{i+1}
             </div>
 
-            <div className="p-8">
-              {/* Subtitle chip */}
-              <div
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono-custom tracking-widest uppercase mb-6 transition-all duration-300"
-                style={{
-                  color: service.accent,
-                  background: `rgba(${service.accentRGB}, 0.1)`,
-                  border: `1px solid rgba(${service.accentRGB}, 0.2)`,
-                }}
+            <div className="p-8 flex flex-col h-full">
+              {/* Tag chip */}
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md mb-7 w-fit font-code text-[10px] tracking-widest transition-all duration-300"
+                style={{ color: svc.color, background: `rgba(${svc.rgb},.08)`, border: `1px solid rgba(${svc.rgb},.2)` }}
               >
-                <Zap className="w-2.5 h-2.5" />
-                {service.subtitle}
+                <Zap className="w-2.5 h-2.5" /> {svc.tag}
               </div>
 
               {/* Icon */}
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center mb-6 transition-all duration-500"
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-all duration-500"
                 style={{
-                  background: `rgba(${service.accentRGB}, ${isHovered ? 0.15 : 0.08})`,
-                  border: `1px solid rgba(${service.accentRGB}, ${isHovered ? 0.3 : 0.15})`,
-                  boxShadow: isHovered ? `0 0 20px rgba(${service.accentRGB}, 0.3)` : 'none',
+                  background: `rgba(${svc.rgb},${hov ? .15 : .07})`,
+                  border: `1px solid rgba(${svc.rgb},${hov ? .35 : .12})`,
+                  boxShadow: hov ? `0 0 25px rgba(${svc.rgb},.25), inset 0 0 15px rgba(${svc.rgb},.1)` : 'none',
+                  transform: hov ? 'translateZ(20px)' : 'none',
                 }}
               >
-                <service.icon className="w-6 h-6" style={{ color: service.accent }} />
+                <svc.icon className="w-6 h-6" style={{ color: svc.color }} />
               </div>
 
-              {/* Title */}
-              <h3 className="font-display text-2xl font-bold text-white mb-3 tracking-tight">
-                {service.title}
-              </h3>
-
-              {/* Description */}
-              <p className="text-white/35 text-sm leading-relaxed mb-8 group-hover:text-white/50">
-                {service.description}
+              {/* Sub-label */}
+              <p className="font-code text-[9px] tracking-[.25em] uppercase mb-2 transition-colors duration-300"
+                style={{ color: `rgba(${svc.rgb}, ${hov ? .8 : .4})` }}
+              >
+                {svc.sub}
               </p>
 
+              {/* Title */}
+              <h3 className="font-display text-xl font-bold text-white mb-4 leading-tight">{svc.title}</h3>
+              <p className="text-white/30 text-sm leading-relaxed mb-8 flex-1">{svc.desc}</p>
+
               {/* Tags */}
-              <div className="flex flex-wrap gap-2 mb-8">
-                {service.tags.map(tag => (
-                  <span
-                    key={tag}
-                    className="px-2.5 py-1 rounded-md font-mono-custom text-[10px] tracking-wider"
-                    style={{
-                      color: 'rgba(255,255,255,0.3)',
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.06)',
-                    }}
-                  >
-                    {tag}
-                  </span>
+              <div className="flex flex-wrap gap-1.5 mb-8">
+                {svc.tags.map(t => (
+                  <span key={t} className="tag">{t}</span>
                 ))}
               </div>
 
-              {/* Bottom stat + CTA */}
-              <div className="flex items-end justify-between">
+              {/* Bottom row */}
+              <div className="flex items-end justify-between mt-auto">
                 <div>
-                  <div
-                    className="font-display text-3xl font-bold"
-                    style={{ color: service.accent }}
-                  >
-                    {service.stat}
-                  </div>
-                  <div className="font-mono-custom text-[10px] text-white/25 tracking-widest uppercase">
-                    {service.statLabel}
-                  </div>
+                  <div className="font-display text-3xl font-black" style={{ color: svc.color }}>{svc.stat}</div>
+                  <div className="font-code text-[9px] text-white/20 tracking-[.2em] uppercase">{svc.statLabel}</div>
                 </div>
-
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300"
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-400"
                   style={{
-                    background: `rgba(${service.accentRGB}, ${isHovered ? 0.15 : 0.05})`,
-                    border: `1px solid rgba(${service.accentRGB}, ${isHovered ? 0.4 : 0.1})`,
-                    transform: isHovered ? 'scale(1.1) rotate(-3deg)' : 'scale(1) rotate(0)',
+                    background: `rgba(${svc.rgb},${hov ? .15 : .05})`,
+                    border: `1px solid rgba(${svc.rgb},${hov ? .4 : .1})`,
+                    transform: hov ? 'scale(1.1) rotate(-5deg)' : 'scale(1)',
                   }}
                 >
-                  <ArrowUpRight className="w-4 h-4" style={{ color: service.accent }} />
+                  <ArrowUpRight className="w-4 h-4" style={{ color: svc.color }} />
                 </div>
               </div>
             </div>
@@ -194,86 +168,56 @@ function TiltCard({ service, index }: { service: typeof services[0]; index: numb
 
 export default function Services() {
   return (
-    <section className="py-32 px-6 bg-[#030303] text-white relative overflow-hidden">
-
-      {/* Background */}
-      <div className="absolute inset-0 dot-pattern opacity-20 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,black,transparent)]" />
+    <section className="relative py-36 px-6 overflow-hidden" style={{ background: '#04020f' }}>
+      {/* Ambient glow */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[120px]" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full bg-cyan-500/08 blur-[100px]" />
+      </div>
+      <div className="absolute inset-0 grid-cosmic [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,black,transparent)]" />
 
       <div className="max-w-6xl mx-auto relative">
-
-        {/* Header */}
-        <div className="mb-20">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="flex items-center gap-3 mb-6"
-          >
-            <div className="w-6 h-px bg-white/20" />
-            <span className="font-mono-custom text-xs text-white/25 tracking-[0.3em] uppercase">Our Services</span>
-          </motion.div>
-
-          <motion.h2
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.1, duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
-            className="font-display text-5xl md:text-7xl font-extrabold leading-[0.9] tracking-tight"
-          >
-            <span className="text-white">Choose Your</span>
-            <br />
-            <span className="text-white/15">Upgrade.</span>
-          </motion.h2>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-            className="mt-6 text-white/35 text-lg max-w-lg leading-relaxed"
-          >
-            We don't just write code. We build ecosystems — select a domain to explore specific capabilities.
-          </motion.p>
-        </div>
+        {/* Section header */}
+        <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}
+          transition={{ duration:.8, ease:[0.23,1,0.32,1] }}
+          className="mb-20"
+        >
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-8 h-px bg-white/15" />
+            <span className="font-code text-[9px] tracking-[.35em] text-white/20 uppercase">Our Services</span>
+          </div>
+          <h2 className="font-display font-black text-5xl md:text-7xl leading-[.88] tracking-tight">
+            <span className="text-white">Choose Your</span><br />
+            <span className="txt-ghost">Upgrade.</span>
+          </h2>
+          <p className="mt-6 text-white/30 text-lg max-w-lg leading-relaxed">
+            We don't write code — we architect ecosystems. Pick a domain to explore capabilities.
+          </p>
+        </motion.div>
 
         {/* Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {services.map((service, i) => (
-            <TiltCard key={service.title} service={service} index={i} />
-          ))}
+        <div className="grid md:grid-cols-3 gap-5">
+          {services.map((s, i) => <HoloCard key={s.title} svc={s} i={i} />)}
         </div>
 
-        {/* Bottom CTA strip */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.4 }}
-          className="mt-16 p-8 rounded-2xl border border-white/5 bg-white/[0.02] flex flex-col md:flex-row items-center justify-between gap-6"
+        {/* Trust strip */}
+        <motion.div initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}
+          transition={{ delay:.4 }}
+          className="mt-12 p-6 rounded-2xl border border-white/[0.04] bg-white/[0.015] flex flex-col sm:flex-row items-center justify-between gap-5"
         >
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-green-400/60" />
-              <span className="text-white/40 text-sm">NDA Protected</span>
-            </div>
-            <div className="w-px h-5 bg-white/10" />
-            <div className="flex items-center gap-2">
-              <Globe className="w-5 h-5 text-blue-400/60" />
-              <span className="text-white/40 text-sm">Remote-first Team</span>
-            </div>
-            <div className="w-px h-5 bg-white/10" />
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-400/60" />
-              <span className="text-white/40 text-sm">2-week Sprint Cycles</span>
-            </div>
+          <div className="flex items-center gap-6 flex-wrap justify-center sm:justify-start">
+            {[{ icon: Shield, label: 'NDA Protected' }, { icon: Globe, label: 'Remote-first' }, { icon: Zap, label: '2-week Sprints' }].map(({ icon:Icon, label }) => (
+              <div key={label} className="flex items-center gap-2">
+                <Icon className="w-3.5 h-3.5 text-white/20" />
+                <span className="font-code text-[10px] text-white/25 tracking-[.1em]">{label}</span>
+              </div>
+            ))}
           </div>
-          <Link
-            href="/contact"
-            className="group flex items-center gap-2 px-6 py-3 rounded-xl font-display font-semibold text-sm text-white/60 hover:text-white border border-white/10 hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] transition-all"
+          <Link href="/contact" data-cur="#ffffff"
+            className="group flex items-center gap-2 px-5 py-2.5 rounded-xl font-display text-xs font-semibold tracking-wider text-white/40 hover:text-white border border-white/08 hover:border-white/15 transition-all"
           >
             Start a Project
-            <ArrowUpRight className="w-4 h-4 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />
+            <ArrowUpRight className="w-3.5 h-3.5 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </motion.div>
       </div>

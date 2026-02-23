@@ -1,221 +1,308 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, ArrowRight, Brain, Cpu, MessageSquare, Network, Sparkles, Zap } from 'lucide-react';
 
+/* ══════════════════════════════════════════════
+   NEURAL BRAIN CANVAS
+   Live nodes connected by synaptic edges,
+   with electrochemical pulse animations
+   firing along random paths
+══════════════════════════════════════════════ */
+function NeuralBrain() {
+  const ref = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = ref.current!;
+    const ctx = canvas.getContext('2d')!;
+    let W = canvas.width  = canvas.offsetWidth;
+    let H = canvas.height = canvas.offsetHeight;
+    let raf: number, t = 0;
+    let mouse = { x: W/2, y: H/2 };
+
+    canvas.addEventListener('mousemove', e => {
+      const r = canvas.getBoundingClientRect();
+      mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
+    });
+
+    /* Generate organic node positions (brain-like blob) */
+    const nodeCount = 55;
+    const nodes = Array.from({ length: nodeCount }, (_, i) => {
+      const angle = (i / nodeCount) * Math.PI * 2;
+      const dist  = (0.3 + Math.random() * 0.38) * Math.min(W, H) * 0.5;
+      const jitter = Math.random() * 0.35;
+      return {
+        x: W/2 + Math.cos(angle + jitter) * dist * (0.7 + Math.random() * 0.6),
+        y: H/2 + Math.sin(angle + jitter) * dist * 0.55 * (0.7 + Math.random() * 0.6),
+        vx: (Math.random() - 0.5) * 0.25,
+        vy: (Math.random() - 0.5) * 0.20,
+        r:  Math.random() * 4 + 2,
+        phase: Math.random() * Math.PI * 2,
+        hue: 260 + Math.random() * 60,
+        active: false,
+        activeTimer: 0,
+      };
+    });
+
+    /* Build edges (connect nearby nodes) */
+    type Edge = { a:number; b:number; dist:number };
+    const edges: Edge[] = [];
+    const maxEdgeDist = Math.min(W,H) * 0.26;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i+1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < maxEdgeDist) edges.push({ a:i, b:j, dist:d });
+      }
+    }
+
+    /* Synaptic pulses */
+    type Pulse = { edgeIdx:number; progress:number; speed:number; color:string };
+    const pulses: Pulse[] = [];
+    const colors = ['#b44dff','#ff2d78','#c084fc','#e879f9','#ffffff'];
+
+    const firePulse = () => {
+      if (edges.length === 0) return;
+      const eIdx = Math.floor(Math.random() * edges.length);
+      pulses.push({
+        edgeIdx: eIdx,
+        progress: 0,
+        speed: 0.008 + Math.random() * 0.012,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      });
+      nodes[edges[eIdx].a].active = true;
+      nodes[edges[eIdx].a].activeTimer = 25;
+    };
+    const pulseInterval = setInterval(firePulse, 280);
+
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+      t += 0.012;
+
+      /* Mouse proximity influence */
+      const mInfluenceR = 120;
+      nodes.forEach(n => {
+        const dx = n.x - mouse.x, dy = n.y - mouse.y;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        if (d < mInfluenceR) {
+          const force = (mInfluenceR - d) / mInfluenceR * 0.015;
+          n.vx += (dx / d) * force;
+          n.vy += (dy / d) * force;
+        }
+        /* Slow drift */
+        n.x += n.vx; n.y += n.vy;
+        n.vx *= 0.98; n.vy *= 0.98;
+        /* Soft boundary */
+        const pad = 50;
+        if (n.x < pad || n.x > W - pad) n.vx *= -1;
+        if (n.y < pad || n.y > H - pad) n.vy *= -1;
+        if (n.activeTimer > 0) n.activeTimer--;
+        if (n.activeTimer === 0) n.active = false;
+      });
+
+      /* Draw edges */
+      edges.forEach(({ a, b, dist }) => {
+        const na = nodes[a], nb = nodes[b];
+        const alpha = Math.max(0, (1 - dist / (maxEdgeDist * 1.1))) * 0.14;
+        ctx.beginPath();
+        ctx.moveTo(na.x, na.y); ctx.lineTo(nb.x, nb.y);
+        ctx.strokeStyle = `rgba(180,77,255,${alpha})`;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      });
+
+      /* Draw pulses along edges */
+      for (let i = pulses.length - 1; i >= 0; i--) {
+        const p = pulses[i];
+        const edge = edges[p.edgeIdx];
+        if (!edge) { pulses.splice(i, 1); continue; }
+        p.progress += p.speed;
+        if (p.progress >= 1) {
+          nodes[edge.b].active = true;
+          nodes[edge.b].activeTimer = 30;
+          pulses.splice(i, 1);
+          continue;
+        }
+        const na = nodes[edge.a], nb = nodes[edge.b];
+        const px = na.x + (nb.x - na.x) * p.progress;
+        const py = na.y + (nb.y - na.y) * p.progress;
+
+        /* Pulse glow */
+        ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color; ctx.shadowBlur = 18;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        /* Trail */
+        const trailLen = 0.08;
+        const t0 = Math.max(0, p.progress - trailLen);
+        const tx = na.x + (nb.x - na.x) * t0;
+        const ty = na.y + (nb.y - na.y) * t0;
+        const grd = ctx.createLinearGradient(tx, ty, px, py);
+        grd.addColorStop(0, `${p.color}00`);
+        grd.addColorStop(1, `${p.color}80`);
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(px, py);
+        ctx.strokeStyle = grd; ctx.lineWidth = 2; ctx.stroke();
+      }
+
+      /* Draw nodes */
+      nodes.forEach(n => {
+        const pulse = 0.8 + 0.2 * Math.sin(t * 1.5 + n.phase);
+        const active = n.active;
+        const radius = n.r * pulse * (active ? 1.6 : 1);
+        const alpha  = 0.3 + 0.3 * pulse + (active ? 0.3 : 0);
+
+        /* Outer glow */
+        if (active) {
+          ctx.beginPath(); ctx.arc(n.x, n.y, radius * 3, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(180,77,255,0.08)`; ctx.fill();
+        }
+
+        /* Core */
+        ctx.beginPath(); ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = active ? `rgba(220,140,255,${alpha + .2})` : `rgba(${n.hue > 285 ? '200,80,255' : '140,80,220'},${alpha})`;
+        ctx.shadowColor = active ? '#e879f9' : '#b44dff';
+        ctx.shadowBlur  = active ? 20 : 6;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      /* Center "brain stem" glow */
+      const cgrd = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.min(W,H)*0.12);
+      cgrd.addColorStop(0, 'rgba(180,77,255,0.08)');
+      cgrd.addColorStop(1, 'transparent');
+      ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.12, 0, Math.PI*2);
+      ctx.fillStyle = cgrd; ctx.fill();
+
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+
+    const resize = () => { W = canvas.width = canvas.offsetWidth; H = canvas.height = canvas.offsetHeight; };
+    window.addEventListener('resize', resize);
+    return () => { cancelAnimationFrame(raf); clearInterval(pulseInterval); window.removeEventListener('resize', resize); };
+  }, []);
+
+  return <canvas ref={ref} className="w-full h-full" />;
+}
+
+/* ══ Page content ══════════════════════════════ */
 const features = [
-  {
-    title: 'LLM Integration',
-    desc: 'GPT-4, Claude, Gemini and open-source models integrated seamlessly into your product stack.',
-    icon: Brain,
-  },
-  {
-    title: 'Custom AI Agents',
-    desc: 'Autonomous agents that reason, plan, and act — handling complex multi-step workflows without human intervention.',
-    icon: Bot,
-  },
-  {
-    title: 'RAG Pipelines',
-    desc: 'Retrieval-Augmented Generation with your proprietary data for highly accurate, contextual responses.',
-    icon: Network,
-  },
-  {
-    title: 'AI Chat Interfaces',
-    desc: 'Production-ready conversational UIs with streaming, memory, and multi-modal capabilities.',
-    icon: MessageSquare,
-  },
-  {
-    title: 'Model Fine-tuning',
-    desc: 'Custom model training on your domain-specific data for unmatched accuracy and performance.',
-    icon: Cpu,
-  },
-  {
-    title: 'Automation Workflows',
-    desc: 'End-to-end business process automation that saves thousands of hours per month.',
-    icon: Zap,
-  },
+  { title: 'LLM Integration',   desc: 'GPT-4o, Claude, Gemini and open-source models woven seamlessly into your product.',       icon: Brain        },
+  { title: 'Custom AI Agents',  desc: 'Autonomous multi-step agents that reason, plan and act — without human intervention.',     icon: Bot          },
+  { title: 'RAG Pipelines',     desc: 'Retrieval-Augmented Generation over your proprietary data for pinpoint accuracy.',         icon: Network      },
+  { title: 'AI Chat UIs',       desc: 'Production streaming chat interfaces with memory, tools, and multi-modal input.',          icon: MessageSquare },
+  { title: 'Fine-tuning',       desc: 'Domain-specific model training for unmatched accuracy and brand-aligned responses.',       icon: Cpu          },
+  { title: 'Automation Flows',  desc: 'End-to-end process automation saving thousands of manual hours per month.',                icon: Zap          },
 ];
 
-const models = ['GPT-4o', 'Claude 3.5', 'Gemini Pro', 'Llama 3', 'Mistral', 'Whisper', 'DALL·E 3', 'Stable Diffusion'];
+const models = ['GPT-4o','Claude 3.5','Gemini Pro','Llama 3','Mistral','Whisper','DALL·E 3','Stable Diffusion','Sora'];
 
 export default function AIPage() {
   return (
-    <main className="min-h-screen bg-[#030303] text-white selection:bg-purple-500/30 selection:text-purple-200">
+    <main className="min-h-screen nebula-ai text-white selection:bg-[#b44dff]/25 selection:text-purple-200">
 
-      {/* HERO */}
-      <section className="relative pt-32 pb-20 px-6 overflow-hidden">
-        {/* Background effects */}
-        <div className="absolute top-0 left-1/4 w-[700px] h-[500px] bg-purple-500/06 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-pink-500/05 blur-[100px] rounded-full pointer-events-none" />
-        <div className="absolute inset-0 dot-pattern opacity-20 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_30%,black,transparent)]" />
+      {/* ── HERO ─────────────────────────────────── */}
+      <section className="relative min-h-screen flex items-center overflow-hidden">
+        <div className="absolute inset-0 grid-cosmic opacity-35 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,black,transparent)]" />
 
-        <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 items-center gap-16 relative">
+        <div className="container mx-auto px-6 pt-28 pb-16 grid grid-cols-1 lg:grid-cols-2 items-center gap-8 relative z-10">
 
           {/* Text */}
-          <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.9, ease: [0.23, 1, 0.32, 1] }}
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/08 text-purple-400 text-xs font-mono-custom tracking-widest uppercase mb-8">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>AI Automation</span>
+          <motion.div initial={{ opacity:0, x:-50 }} animate={{ opacity:1, x:0 }} transition={{ duration:.9, ease:[0.23,1,0.32,1] }}>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#b44dff]/28 bg-[#b44dff]/07 text-[#c084fc] text-[9px] font-code tracking-[.25em] uppercase mb-8">
+              <Sparkles className="w-3 h-3" /> AI Automation
             </div>
 
-            <h1 className="font-display text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-[0.9]">
-              Intelligence<br />
-              <span className="gradient-text-purple">as a</span><br />
-              <span className="text-white/15">Service.</span>
+            <h1 className="font-display font-black text-5xl md:text-7xl leading-[.88] tracking-tight mb-6">
+              <span className="block text-white/12">Intelligence</span>
+              <span className="block txt-ai">as a</span>
+              <span className="block text-white">Service.</span>
             </h1>
 
-            <p className="text-white/35 text-lg mb-10 max-w-lg leading-relaxed">
-              We don't just integrate AI — we architect intelligent systems that think, learn, and scale. Custom agents and LLM workflows that become your competitive moat.
+            <p className="text-white/33 text-lg leading-relaxed mb-10 max-w-md">
+              We architect{' '}
+              <span className="text-white/65">intelligent systems</span>{' '}
+              that think, learn and compound — turning your most complex workflows into autonomous, scalable assets.
             </p>
 
-            <div className="flex flex-wrap gap-4">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                className="group relative px-8 py-4 bg-purple-600 text-white font-display font-bold text-sm tracking-wide rounded-xl overflow-hidden hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] transition-all"
+            <div className="flex flex-wrap gap-4 mb-12">
+              <motion.button whileHover={{ scale:1.02 }} whileTap={{ scale:.96 }}
+                className="group relative px-8 py-4 rounded-xl font-display font-bold text-sm tracking-wider text-white overflow-hidden"
+                data-cur="#b44dff"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="relative z-10 flex items-center gap-2">
-                  Build Your AI Stack
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#7c3aed] via-[#b44dff] to-[#e879f9]" />
+                <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-15 transition-opacity" />
+                <span className="relative z-10 flex items-center gap-2">Build Your AI Stack <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></span>
               </motion.button>
-              <button className="px-8 py-4 border border-white/08 bg-white/03 rounded-xl font-display font-medium text-sm text-white/40 hover:text-white hover:border-white/15 transition-all">
+              <button className="px-8 py-4 rounded-xl font-display font-semibold text-sm tracking-wider text-white/40 hover:text-white border border-white/08 hover:border-white/18 bg-white/03 transition-all">
                 See Use Cases
               </button>
             </div>
+
+            <div className="flex gap-8">
+              {[['10×','Efficiency'],['∞','Scale'],['<100ms','Latency']].map(([v,l]) => (
+                <div key={l}>
+                  <div className="font-display text-xl font-bold txt-ai">{v}</div>
+                  <div className="font-code text-[9px] text-white/20 tracking-[.2em] uppercase">{l}</div>
+                </div>
+              ))}
+            </div>
           </motion.div>
 
-          {/* AI Visual */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1, delay: 0.3, ease: [0.23, 1, 0.32, 1] }}
-            className="relative flex items-center justify-center"
+          {/* Neural brain visual */}
+          <motion.div initial={{ opacity:0, scale:.85 }} animate={{ opacity:1, scale:1 }}
+            transition={{ duration:1.2, delay:.3, ease:[0.23,1,0.32,1] }}
           >
-            {/* Neural network animation */}
-            <div className="relative w-72 h-72">
-              {/* Center node */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border-2 border-purple-500/40 bg-purple-500/10 flex items-center justify-center z-10 shadow-[0_0_30px_rgba(168,85,247,0.3)]">
-                <Bot className="w-7 h-7 text-purple-400" />
-              </div>
-
-              {/* Orbit rings */}
-              <div className="absolute inset-0 rounded-full border border-purple-500/10 animate-spin-slow" />
-              <div className="absolute inset-4 rounded-full border border-purple-500/06 animate-spin-reverse" />
-              <div className="absolute inset-8 rounded-full border border-white/04 animate-spin-slow" style={{ animationDuration: '25s' }} />
-
-              {/* Satellite nodes */}
-              {[
-                { label: 'GPT-4o', angle: 0, color: '#a855f7' },
-                { label: 'Claude', angle: 60, color: '#ec4899' },
-                { label: 'Gemini', angle: 120, color: '#8b5cf6' },
-                { label: 'Llama', angle: 180, color: '#a855f7' },
-                { label: 'RAG', angle: 240, color: '#ec4899' },
-                { label: 'Fine-tune', angle: 300, color: '#8b5cf6' },
-              ].map(({ label, angle, color }) => {
-                const rad = (angle * Math.PI) / 180;
-                const x = 50 + 42 * Math.cos(rad);
-                const y = 50 + 42 * Math.sin(rad);
-                return (
-                  <div
-                    key={label}
-                    className="absolute flex items-center justify-center"
-                    style={{
-                      left: `${x}%`,
-                      top: `${y}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                  >
-                    <div
-                      className="px-2 py-1 rounded-md font-mono-custom text-[9px] border"
-                      style={{
-                        color,
-                        borderColor: `${color}30`,
-                        background: `${color}10`,
-                      }}
-                    >
-                      {label}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="absolute inset-[-15%] rounded-full bg-purple-600/05 blur-[80px] pointer-events-none" />
+            <div className="relative rounded-3xl overflow-hidden border border-[#b44dff]/12 shadow-[0_0_80px_rgba(180,77,255,0.1)]"
+              style={{ height:'520px', background:'#060210' }}
+            >
+              <NeuralBrain />
+              <div className="absolute top-5 left-5 font-code text-[9px] text-purple-400/35 tracking-[.2em]">// NEURAL NETWORK LIVE</div>
+              <div className="absolute bottom-5 right-5 font-code text-[9px] text-purple-400/35 tracking-[.2em]">SYNAPSES FIRING ●</div>
             </div>
-
-            {/* Floating stat */}
-            <motion.div
-              animate={{ y: [-6, 6, -6] }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              className="absolute -right-4 top-8 px-4 py-3 rounded-xl border border-purple-500/20 bg-[#080808] shadow-[0_0_25px_rgba(168,85,247,0.1)]"
-            >
-              <div className="font-display text-xl font-bold text-purple-400">10x</div>
-              <div className="font-mono-custom text-[9px] text-white/25 tracking-wider">Faster execution</div>
-            </motion.div>
-
-            <motion.div
-              animate={{ y: [6, -6, 6] }}
-              transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-              className="absolute -left-4 bottom-8 px-4 py-3 rounded-xl border border-green-500/20 bg-[#080808] shadow-[0_0_25px_rgba(0,255,157,0.08)]"
-            >
-              <div className="font-display text-xl font-bold text-green-400">∞</div>
-              <div className="font-mono-custom text-[9px] text-white/25 tracking-wider">Scale potential</div>
-            </motion.div>
           </motion.div>
         </div>
       </section>
 
-      {/* FEATURES */}
+      {/* ── FEATURES ─────────────────────────────── */}
       <section className="py-24 border-t border-white/[0.04]">
         <div className="container mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="mb-16"
-          >
-            <span className="font-mono-custom text-xs text-white/20 tracking-[0.3em] uppercase">AI Capabilities</span>
-            <h2 className="font-display text-4xl font-extrabold mt-3 text-white">What we build</h2>
+          <motion.div initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} className="mb-14">
+            <span className="font-code text-[9px] tracking-[.3em] text-white/18 uppercase">AI Capabilities</span>
+            <h2 className="font-display font-black text-4xl mt-3 text-white">What we build</h2>
           </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {features.map((item, idx) => (
-              <motion.div
-                key={item.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-30px' }}
-                transition={{ delay: idx * 0.08, duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
-                className="group p-6 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:border-purple-500/25 hover:bg-purple-500/[0.04] transition-all duration-500"
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {features.map((f, i) => (
+              <motion.div key={f.title}
+                initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true, margin:'-20px' }}
+                transition={{ delay:i*.07, duration:.7, ease:[0.23,1,0.32,1] }}
+                className="group p-6 rounded-2xl border border-white/[0.05] bg-white/[0.02] hover:border-[#b44dff]/22 hover:bg-[#b44dff]/[0.04] transition-all duration-500"
               >
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-5 group-hover:scale-110 group-hover:shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all">
-                  <item.icon className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-[#b44dff]/08 flex items-center justify-center text-[#c084fc] mb-5 group-hover:scale-110 group-hover:shadow-[0_0_14px_rgba(180,77,255,0.3)] transition-all">
+                  <f.icon className="w-5 h-5" />
                 </div>
-                <h3 className="font-display text-lg font-bold text-white mb-2">{item.title}</h3>
-                <p className="text-white/30 text-sm leading-relaxed">{item.desc}</p>
+                <h3 className="font-display font-bold text-base text-white mb-2">{f.title}</h3>
+                <p className="text-white/28 text-sm leading-relaxed">{f.desc}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* MODELS MARQUEE */}
-      <section className="py-16 border-t border-white/[0.04] overflow-hidden">
+      {/* ── MODELS MARQUEE ───────────────────────── */}
+      <section className="py-14 border-t border-white/[0.04] overflow-hidden">
         <div className="container mx-auto px-6">
-          <p className="font-mono-custom text-xs text-white/15 text-center mb-10 tracking-[0.4em] uppercase">
-            Models We Work With
-          </p>
-          <div className="relative overflow-hidden">
-            <div className="flex gap-6 animate-marquee whitespace-nowrap" style={{ width: 'max-content' }}>
-              {[...models, ...models].map((model, i) => (
-                <div
-                  key={i}
-                  className="px-5 py-2.5 rounded-lg border border-white/06 bg-white/02 font-display font-bold text-sm text-white/20 hover:text-purple-400 hover:border-purple-500/30 transition-all shrink-0"
-                >
-                  {model}
+          <p className="font-code text-[9px] text-white/12 text-center mb-8 tracking-[.4em] uppercase">Models We Work With</p>
+          <div className="overflow-hidden">
+            <div className="flex gap-5 anim-marquee" style={{ width:'max-content' }}>
+              {[...models,...models].map((m,i) => (
+                <div key={i} className="shrink-0 px-5 py-2.5 rounded-lg border border-white/06 bg-white/02 font-display font-bold text-sm text-white/20 hover:text-[#c084fc] hover:border-[#b44dff]/30 transition-all cursor-default">
+                  {m}
                 </div>
               ))}
             </div>

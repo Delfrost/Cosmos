@@ -1,384 +1,303 @@
 'use client';
 
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
-// ─── Particle Canvas ──────────────────────────────────────
-function ParticleField() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+/* ── Star / Asteroid Canvas ─────────────────────── */
+function CosmicCanvas() {
+  const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const canvas = ref.current!;
+    const ctx = canvas.getContext('2d')!;
+    let W = canvas.width  = window.innerWidth;
+    let H = canvas.height = window.innerHeight;
+    let mouse = { x: W / 2, y: H / 2 };
+    let raf: number;
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    /* Stars */
+    const stars = Array.from({ length: 180 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() * 1.2 + 0.2,
+      alpha: Math.random() * 0.6 + 0.1,
+      speed: Math.random() * 0.15 + 0.03,
+      twinkle: Math.random() * Math.PI * 2,
+    }));
 
-    const particles: Array<{
-      x: number; y: number; vx: number; vy: number;
-      size: number; opacity: number; color: string;
-    }> = [];
+    /* Nebula dust specs */
+    const dust = Array.from({ length: 40 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() * 80 + 40,
+      hue: [260, 200, 300, 180][Math.floor(Math.random() * 4)],
+      alpha: Math.random() * 0.04 + 0.01,
+    }));
 
-    const colors = ['#00ff9d', '#a855f7', '#3b82f6', '#ffffff'];
+    /* Comets */
+    const comets: { x:number; y:number; vx:number; vy:number; len:number; alpha:number }[] = [];
+    const spawnComet = () => {
+      comets.push({ x: Math.random() * W, y: 0, vx: 3 + Math.random() * 4, vy: 2 + Math.random() * 3, len: 80 + Math.random() * 120, alpha: 1 });
+    };
+    const cometInterval = setInterval(spawnComet, 4000);
 
-    for (let i = 0; i < 80; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        size: Math.random() * 1.5 + 0.5,
-        opacity: Math.random() * 0.4 + 0.1,
-        color: colors[Math.floor(Math.random() * colors.length)],
+    window.addEventListener('mousemove', e => { mouse = { x: e.clientX, y: e.clientY }; });
+    const resize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
+    window.addEventListener('resize', resize);
+
+    let t = 0;
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+      t += 0.01;
+
+      /* Nebula dust */
+      dust.forEach(d => {
+        const grd = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
+        grd.addColorStop(0,   `hsla(${d.hue},80%,60%,${d.alpha * 2})`);
+        grd.addColorStop(1,   `hsla(${d.hue},80%,60%,0)`);
+        ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fillStyle = grd; ctx.fill();
       });
-    }
 
-    let animId: number;
-    let mouseX = -1000, mouseY = -1000;
-
-    const handleMouse = (e: MouseEvent) => { mouseX = e.clientX; mouseY = e.clientY; };
-    window.addEventListener('mousemove', handleMouse);
-
-    function animate() {
-      if (!ctx || !canvas) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      particles.forEach((p) => {
-        const dx = mouseX - p.x;
-        const dy = mouseY - p.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 120) {
-          const force = (120 - dist) / 120;
-          p.vx -= (dx / dist) * force * 0.02;
-          p.vy -= (dy / dist) * force * 0.02;
+      /* Stars with mouse parallax */
+      stars.forEach(s => {
+        s.twinkle += 0.02;
+        const a = s.alpha * (0.7 + 0.3 * Math.sin(s.twinkle));
+        const px = s.x + (mouse.x - W / 2) * s.speed * -0.04;
+        const py = s.y + (mouse.y - H / 2) * s.speed * -0.04;
+        ctx.beginPath(); ctx.arc(px, py, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill();
+        /* Occasional bright star cross */
+        if (s.r > 1.0) {
+          ctx.strokeStyle = `rgba(255,255,255,${a * 0.4})`;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath(); ctx.moveTo(px - s.r * 3, py); ctx.lineTo(px + s.r * 3, py);
+          ctx.moveTo(px, py - s.r * 3); ctx.lineTo(px, py + s.r * 3);
+          ctx.stroke();
         }
+      });
 
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.99;
-        p.vy *= 0.99;
-
-        if (p.x < 0) p.x = canvas.width;
-        if (p.x > canvas.width) p.x = 0;
-        if (p.y < 0) p.y = canvas.height;
-        if (p.y > canvas.height) p.y = 0;
-
+      /* Comets */
+      for (let i = comets.length - 1; i >= 0; i--) {
+        const c = comets[i];
+        const grd = ctx.createLinearGradient(c.x - c.vx * c.len / 4, c.y - c.vy * c.len / 4, c.x, c.y);
+        grd.addColorStop(0, `rgba(180,150,255,0)`);
+        grd.addColorStop(1, `rgba(220,200,255,${c.alpha * 0.9})`);
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.opacity;
-        ctx.fill();
-      });
+        ctx.moveTo(c.x - c.vx * c.len / 4, c.y - c.vy * c.len / 4);
+        ctx.lineTo(c.x, c.y);
+        ctx.strokeStyle = grd; ctx.lineWidth = 1.5; ctx.stroke();
+        c.x += c.vx; c.y += c.vy; c.alpha -= 0.004;
+        if (c.alpha <= 0 || c.x > W + 100) comets.splice(i, 1);
+      }
 
-      // Draw connections
-      ctx.globalAlpha = 1;
-      particles.forEach((p, i) => {
-        particles.slice(i + 1).forEach((q) => {
-          const dx = p.x - q.x;
-          const dy = p.y - q.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 100) {
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(q.x, q.y);
-            ctx.strokeStyle = `rgba(255,255,255,${0.03 * (1 - dist / 100)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        });
-      });
-
-      animId = requestAnimationFrame(animate);
-    }
-    animate();
-
-    const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      raf = requestAnimationFrame(draw);
     };
-    window.addEventListener('resize', handleResize);
+    draw();
 
-    return () => {
-      cancelAnimationFrame(animId);
-      window.removeEventListener('mousemove', handleMouse);
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => { cancelAnimationFrame(raf); clearInterval(cometInterval); window.removeEventListener('resize', resize); };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" />;
+  return <canvas ref={ref} className="absolute inset-0 pointer-events-none" />;
 }
 
-// ─── Scramble Text Effect ─────────────────────────────────
-function ScrambleText({ text, delay = 0 }: { text: string; delay?: number }) {
-  const [displayed, setDisplayed] = useState('');
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%';
-
+/* ── Glitch Text ────────────────────────────────── */
+function GlitchWord({ word, className }: { word: string; className?: string }) {
+  const [glitch, setGlitch] = useState(false);
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    timeout = setTimeout(() => {
-      let iteration = 0;
-      const interval = setInterval(() => {
-        setDisplayed(
-          text.split('').map((char, idx) => {
-            if (char === ' ') return ' ';
-            if (idx < iteration) return text[idx];
-            return chars[Math.floor(Math.random() * chars.length)];
-          }).join('')
-        );
-        if (iteration >= text.length) clearInterval(interval);
-        iteration += 0.5;
-      }, 30);
-    }, delay);
-    return () => clearTimeout(timeout);
-  }, [text, delay]);
+    const iv = setInterval(() => {
+      setGlitch(true);
+      setTimeout(() => setGlitch(false), 200);
+    }, 4000 + Math.random() * 3000);
+    return () => clearInterval(iv);
+  }, []);
 
-  return <span>{displayed || text}</span>;
-}
-
-// ─── Floating Orbs ────────────────────────────────────────
-function FloatingOrb({ color, size, x, y, delay }: { color: string; size: string; x: string; y: string; delay: string }) {
   return (
-    <div
-      className="absolute rounded-full pointer-events-none animate-pulse-glow"
-      style={{
-        background: color,
-        width: size,
-        height: size,
-        left: x,
-        top: y,
-        filter: 'blur(80px)',
-        animationDelay: delay,
-      }}
-    />
+    <span className={`relative inline-block ${className}`}>
+      {word}
+      {glitch && (
+        <>
+          <span className="absolute inset-0 text-[#00ffa3] translate-x-[3px]" style={{clipPath:'inset(30% 0 40% 0)'}}>{word}</span>
+          <span className="absolute inset-0 text-[#ff2d78] -translate-x-[3px]" style={{clipPath:'inset(60% 0 10% 0)'}}>{word}</span>
+        </>
+      )}
+    </span>
   );
 }
 
-// ─── Magnetic Button ─────────────────────────────────────
-function MagneticButton({ children, className, primary }: { children: React.ReactNode; className?: string; primary?: boolean }) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 300, damping: 20 });
-  const springY = useSpring(y, { stiffness: 300, damping: 20 });
+/* ── Orbiting Stats ─────────────────────────────── */
+function OrbitingStat({ label, value, angle, radius }: { label:string; value:string; angle:number; radius:number }) {
+  const rad = (angle * Math.PI) / 180;
+  return (
+    <motion.div
+      className="absolute flex flex-col items-center"
+      style={{
+        left: `calc(50% + ${Math.cos(rad) * radius}px)`,
+        top:  `calc(50% + ${Math.sin(rad) * radius}px)`,
+        transform: 'translate(-50%, -50%)',
+      }}
+      initial={{ opacity: 0, scale: 0 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: 1.8 + angle / 360, duration: 0.6, type: 'spring' }}
+    >
+      <div className="font-display text-xl font-bold txt-cosmic">{value}</div>
+      <div className="font-code text-[9px] text-white/25 tracking-[.2em] uppercase mt-0.5">{label}</div>
+    </motion.div>
+  );
+}
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = ref.current!.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    x.set((e.clientX - centerX) * 0.25);
-    y.set((e.clientY - centerY) * 0.25);
+/* ── Magnetic CTA ──────────────────────────────── */
+function MagBtn({ children, primary, href }: { children: React.ReactNode; primary?: boolean; href?: string }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const x = useMotionValue(0), y = useMotionValue(0);
+  const sx = useSpring(x, { stiffness: 250, damping: 18 });
+  const sy = useSpring(y, { stiffness: 250, damping: 18 });
+
+  const move = (e: React.MouseEvent) => {
+    const r = ref.current!.getBoundingClientRect();
+    x.set((e.clientX - r.left - r.width  / 2) * 0.22);
+    y.set((e.clientY - r.top  - r.height / 2) * 0.22);
   };
 
   return (
-    <motion.button
-      ref={ref}
-      onMouseMove={handleMouseMove}
+    <motion.button ref={ref} style={{ x: sx, y: sy }} onMouseMove={move}
       onMouseLeave={() => { x.set(0); y.set(0); }}
-      style={{ x: springX, y: springY }}
-      whileTap={{ scale: 0.96 }}
-      className={className}
-      data-cursor="button"
+      whileTap={{ scale: 0.95 }}
+      data-cur={primary ? '#00ffa3' : '#ffffff'}
+      className={primary
+        ? 'group relative px-8 py-4 rounded-xl font-display font-bold text-sm tracking-wider overflow-hidden text-black'
+        : 'group px-8 py-4 rounded-xl font-display font-semibold text-sm tracking-wider text-white/50 hover:text-white border border-white/10 hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] transition-all'
+      }
     >
-      {children}
+      {primary && (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-r from-[#00ffa3] via-[#00e5ff] to-[#00ffa3] bg-[length:200%] anim-aurora" />
+          <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-15 transition-opacity" />
+        </>
+      )}
+      <span className="relative z-10 flex items-center gap-2">{children}</span>
     </motion.button>
   );
 }
 
-// ─── Counter Animation ────────────────────────────────────
-function AnimatedStat({ value, suffix, label }: { value: number; suffix: string; label: string }) {
-  const [count, setCount] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          let start = 0;
-          const step = value / 60;
-          const timer = setInterval(() => {
-            start += step;
-            if (start >= value) { setCount(value); clearInterval(timer); }
-            else setCount(Math.floor(start));
-          }, 16);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.5 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [value]);
-
-  return (
-    <div ref={ref} className="text-center group">
-      <div className="font-display text-3xl md:text-4xl font-bold text-white mb-1">
-        <span className="gradient-text-green">{count}</span>
-        <span className="text-white/40 text-2xl">{suffix}</span>
-      </div>
-      <div className="font-mono-custom text-xs text-white/30 tracking-widest uppercase">{label}</div>
-    </div>
-  );
-}
-
-// ─── Main Hero ────────────────────────────────────────────
 export default function Hero() {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [mouseXY, setMouseXY] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    const handleMouse = (e: MouseEvent) => {
-      setMousePosition({
-        x: (e.clientX / window.innerWidth - 0.5) * 20,
-        y: (e.clientY / window.innerHeight - 0.5) * 20,
-      });
-    };
-    window.addEventListener('mousemove', handleMouse);
-    return () => window.removeEventListener('mousemove', handleMouse);
+    const fn = (e: MouseEvent) => setMouseXY({
+      x: (e.clientX / window.innerWidth  - 0.5) * 30,
+      y: (e.clientY / window.innerHeight - 0.5) * 20,
+    });
+    window.addEventListener('mousemove', fn);
+    return () => window.removeEventListener('mousemove', fn);
   }, []);
 
+  const words = ['DIGITAL', 'REALITY'];
+
   return (
-    <section className="relative w-full min-h-screen flex flex-col items-center justify-center overflow-hidden bg-[#030303]">
-
-      {/* Particle system */}
-      <ParticleField />
-
-      {/* Background orbs */}
-      <FloatingOrb color="rgba(168,85,247,0.15)" size="700px" x="-15%" y="-20%" delay="0s" />
-      <FloatingOrb color="rgba(0,255,157,0.08)" size="500px" x="60%" y="30%" delay="2s" />
-      <FloatingOrb color="rgba(59,130,246,0.1)" size="400px" x="10%" y="60%" delay="4s" />
+    <section className="relative w-full min-h-screen flex items-center justify-center overflow-hidden nebula-home">
+      <CosmicCanvas />
 
       {/* Grid */}
-      <div className="absolute inset-0 grid-pattern opacity-40 [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,black_50%,transparent_100%)]" />
+      <div className="absolute inset-0 grid-cosmic opacity-60 [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,black_40%,transparent_100%)]" />
 
-      {/* Scanline effect */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.015]">
-        <div
-          className="absolute left-0 right-0 h-px bg-white"
-          style={{ animation: 'scanline 8s linear infinite' }}
-        />
-      </div>
+      {/* Radial vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_50%_50%,transparent_30%,rgba(4,2,15,0.6)_100%)]" />
 
-      {/* Content */}
-      <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
+      <div className="relative z-10 text-center px-4 max-w-6xl mx-auto">
 
-        {/* Top badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
-          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-sm text-sm text-white/50 mb-8"
+        {/* Status badge */}
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.7 }}
+          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-md text-xs text-white/40 mb-12 font-code"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="font-mono-custom text-xs tracking-widest uppercase">
-            <ScrambleText text="Accepting New Clients for 2026" delay={500} />
-          </span>
-          <Sparkles className="w-3.5 h-3.5 text-yellow-400/60" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00ffa3] animate-pulse" />
+          <span className="tracking-[.2em] uppercase">Accepting New Clients · 2026</span>
+          <Sparkles className="w-3 h-3 text-yellow-300/60" />
         </motion.div>
 
         {/* Main headline */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4, duration: 0.8 }}
-          style={{ transform: `translate(${mousePosition.x * 0.2}px, ${mousePosition.y * 0.2}px)` }}
-        >
-          <h1 className="font-display text-6xl sm:text-7xl md:text-[6rem] lg:text-[7.5rem] font-extrabold leading-[0.9] tracking-tight mb-6">
-            <motion.span
-              className="block text-white"
-              initial={{ opacity: 0, y: 60 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 1, ease: [0.23, 1, 0.32, 1] }}
-            >
-              We Forge
-            </motion.span>
-            <motion.span
-              className="block gradient-text-green"
-              initial={{ opacity: 0, y: 60 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.65, duration: 1, ease: [0.23, 1, 0.32, 1] }}
-            >
-              Digital
-            </motion.span>
-            <motion.span
-              className="block text-white/20"
-              initial={{ opacity: 0, y: 60 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8, duration: 1, ease: [0.23, 1, 0.32, 1] }}
-            >
-              Reality.
-            </motion.span>
+        <div style={{ transform: `translate(${mouseXY.x * 0.12}px, ${mouseXY.y * 0.08}px)` }}>
+          <motion.p initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+            className="font-display text-[11px] tracking-[.5em] text-white/25 uppercase mb-4"
+          >
+            Cosmos Agency
+          </motion.p>
+
+          <h1 className="font-display font-black leading-[0.88] tracking-tight">
+            {['We Forge', ...words].map((line, i) => (
+              <motion.div key={line} initial={{ opacity: 0, y: 60, skewY: 4 }} animate={{ opacity: 1, y: 0, skewY: 0 }}
+                transition={{ delay: 0.55 + i * 0.18, duration: 1, ease: [0.23, 1, 0.32, 1] }}
+                className={`block ${
+                  i === 0 ? 'text-5xl sm:text-7xl md:text-8xl lg:text-[7rem] text-white mb-1'
+                  : i === 1 ? 'text-6xl sm:text-8xl md:text-9xl lg:text-[9rem]'
+                  : 'text-5xl sm:text-7xl md:text-8xl lg:text-[7rem] text-white/20'
+                }`}
+                style={i === 1 ? {
+                  background: 'linear-gradient(100deg, #00ffa3 0%, #00e5ff 40%, #b44dff 75%, #ff2d78 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  filter: 'drop-shadow(0 0 40px rgba(0,255,163,0.4))',
+                } : undefined}
+              >
+                {i === 1 ? <GlitchWord word={line} /> : line}
+              </motion.div>
+            ))}
           </h1>
-        </motion.div>
+        </div>
 
         {/* Subtitle */}
-        <motion.p
-          className="text-base md:text-lg text-white/30 mb-10 max-w-xl mx-auto leading-relaxed font-light"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1, duration: 0.8 }}
+        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }}
+          className="text-base md:text-lg text-white/28 mt-8 mb-12 max-w-xl mx-auto leading-relaxed"
         >
-          An agency bridging <span className="text-white/60 font-medium">Concept</span> and{' '}
-          <span className="text-white/60 font-medium">Code</span>. Specializing in High-Performance Web,
-          Game Development, and AI Systems.
+          Bridging <span className="text-white/60 font-medium">Concept</span> and{' '}
+          <span className="text-white/60 font-medium">Code</span> —{' '}
+          High-performance web, game development, and AI systems that redefine what's possible.
         </motion.p>
 
-        {/* CTA Buttons */}
-        <motion.div
+        {/* CTAs */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.4 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.1, duration: 0.8 }}
         >
-          <MagneticButton
-            primary
-            className="group relative px-8 py-4 bg-white text-black font-display font-bold text-sm tracking-wide rounded-xl overflow-hidden hover:shadow-[0_0_40px_rgba(255,255,255,0.2)] transition-shadow"
-          >
-            <span className="relative z-10 flex items-center gap-2">
-              View Our Work
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-emerald-300 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          </MagneticButton>
-
-          <MagneticButton className="group px-8 py-4 font-display font-semibold text-sm tracking-wide rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] transition-all">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-              View Services
-            </span>
-          </MagneticButton>
+          <MagBtn primary>
+            Explore Our Work <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </MagBtn>
+          <MagBtn>
+            <span className="w-2 h-2 rounded-full bg-[#00ffa3] mr-1" />
+            View Services
+          </MagBtn>
         </motion.div>
 
-        {/* Stats row */}
-        <motion.div
-          className="flex items-center justify-center gap-12 mt-20 pt-12 border-t border-white/[0.05]"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.4 }}
+        {/* Floating stats */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.8 }}
+          className="flex items-center justify-center gap-10 mt-20 pt-10 border-t border-white/[0.05]"
         >
-          <AnimatedStat value={50} suffix="+" label="Projects" />
-          <div className="w-px h-8 bg-white/10" />
-          <AnimatedStat value={4} suffix="+" label="Years" />
-          <div className="w-px h-8 bg-white/10" />
-          <AnimatedStat value={98} suffix="%" label="Satisfaction" />
+          {[
+            { v: '50+',  l: 'Projects'    },
+            { v: '4+',   l: 'Years'       },
+            { v: '100%', l: 'Satisfaction' },
+          ].map(({ v, l }, i) => (
+            <div key={l} className="flex items-center gap-10">
+              {i > 0 && <div className="w-px h-8 bg-white/08" />}
+              <div className="text-center">
+                <div className="font-display text-2xl font-bold txt-cosmic">{v}</div>
+                <div className="font-code text-[9px] text-white/25 tracking-[.25em] uppercase mt-1">{l}</div>
+              </div>
+            </div>
+          ))}
         </motion.div>
       </div>
 
-      {/* Bottom gradient fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#030303] to-transparent pointer-events-none" />
+      {/* Bottom fade */}
+      <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-[#04020f] to-transparent pointer-events-none" />
 
-      {/* Scroll indicator */}
-      <motion.div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 2 }}
+      {/* Scroll hint */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.4 }}
+        className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3"
       >
-        <span className="font-mono-custom text-[10px] text-white/20 tracking-[0.3em] uppercase">Scroll</span>
-        <motion.div
-          className="w-px h-8 bg-gradient-to-b from-white/20 to-transparent"
-          animate={{ scaleY: [1, 0.5, 1], opacity: [0.3, 0.8, 0.3] }}
+        <span className="font-code text-[9px] tracking-[.35em] text-white/20 uppercase">Scroll</span>
+        <motion.div className="w-px h-10 origin-top"
+          style={{ background: 'linear-gradient(to bottom, rgba(180,77,255,0.5), transparent)' }}
+          animate={{ scaleY: [1, 0.3, 1], opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 2, repeat: Infinity }}
         />
       </motion.div>
